@@ -64,7 +64,10 @@ fn run(mut logs: Option<File>, filename: Option<PathBuf>) -> std::io::Result<()>
     let mut mode = "Normal";
 
     let mut prefered_col: Option<u16> = None;
-    let mut cmd_message = String::new();
+    let mut cmd_message = Rope::new();
+
+    let mut prev_cursor_row = 0;
+    let mut prev_cursor_col = 0;
 
     loop {
         let (cols, rows) = terminal::size()?;
@@ -103,7 +106,11 @@ fn run(mut logs: Option<File>, filename: Option<PathBuf>) -> std::io::Result<()>
         stdout().execute(style::Print(format!("{}\r\n{}", mode, cmd_message)))?;
         stdout().execute(cursor::MoveTo(editor.cursor_col, editor.cursor_row))?;
 
-        if mode == "Insert" {
+        if mode == "Normal" {
+            stdout().execute(cursor::SetCursorStyle::SteadyBlock)?;
+        } else if mode == "Insert" {
+            stdout().execute(cursor::SetCursorStyle::SteadyBar)?;
+        } else if mode == "Command" {
             stdout().execute(cursor::SetCursorStyle::SteadyBar)?;
         } else {
             stdout().execute(cursor::SetCursorStyle::SteadyBlock)?;
@@ -126,7 +133,11 @@ fn run(mut logs: Option<File>, filename: Option<PathBuf>) -> std::io::Result<()>
                 (event::KeyCode::Char('w'), "Normal") => {
                     if editor.filename.is_some() {
                         editor.save();
-                        cmd_message = format!("{:?} written", editor.filename.as_ref().unwrap());
+                        cmd_message.remove(0..cmd_message.len_chars());
+                        cmd_message.insert(
+                            0,
+                            &format!("{:?} written", editor.filename.as_ref().unwrap()),
+                        );
                     }
                 }
                 (event::KeyCode::Char('h'), "Normal") => {
@@ -177,13 +188,78 @@ fn run(mut logs: Option<File>, filename: Option<PathBuf>) -> std::io::Result<()>
                         editor.cursor_col += 1;
                     }
                 }
+                (event::KeyCode::Char(':'), "Normal") => {
+                    mode = "Command";
+                    cmd_message.remove(0..cmd_message.len_chars());
+                    cmd_message.insert(0, ":");
+
+                    prev_cursor_col = editor.cursor_col;
+                    prev_cursor_row = editor.cursor_row;
+
+                    editor.cursor_row = rows - 1;
+                    editor.cursor_col = 1;
+                }
+                (event::KeyCode::Char(c), "Command") => {
+                    cmd_message.insert_char(editor.cursor_col.into(), c);
+                    editor.cursor_col += 1;
+                }
+                (event::KeyCode::Backspace, "Command") => {
+                    if editor.cursor_col == 1 {
+                        mode = "Normal";
+                        cmd_message.remove(0..cmd_message.len_chars());
+                        editor.cursor_col = prev_cursor_col;
+                        editor.cursor_row = prev_cursor_row;
+                        continue;
+                    }
+                    cmd_message
+                        .remove((editor.cursor_col as usize - 1)..(editor.cursor_col as usize));
+                    editor.cursor_col -= 1;
+                }
+                (event::KeyCode::Esc, "Command") => {
+                    mode = "Normal";
+                    cmd_message.remove(0..cmd_message.len_chars());
+
+                    editor.cursor_col = prev_cursor_col;
+                    editor.cursor_row = prev_cursor_row;
+                }
+                (event::KeyCode::Enter, "Command") => {
+                    if cmd_message == ":q" || cmd_message == ":quit" {
+                        stdout().execute(cursor::SetCursorStyle::SteadyBlock)?;
+                        break;
+                    } else if cmd_message == ":w" || cmd_message == ":write" {
+                        mode = "Normal";
+                        editor.cursor_col = prev_cursor_col;
+                        editor.cursor_row = prev_cursor_row;
+
+                        if editor.filename.is_some() {
+                            editor.save();
+                            cmd_message.remove(0..cmd_message.len_chars());
+                            cmd_message.insert(
+                                0,
+                                &format!("{:?} written", editor.filename.as_ref().unwrap()),
+                            );
+                        } else {
+                            cmd_message.remove(0..cmd_message.len_chars());
+                            cmd_message.insert(0, "Cannot save file without a name");
+                        }
+                    } else {
+                        mode = "Normal";
+                        let cmd = cmd_message.to_string();
+
+                        cmd_message.remove(0..cmd_message.len_chars());
+                        cmd_message.insert(0, &format!("Unrecognized command {}", cmd));
+
+                        editor.cursor_col = prev_cursor_col;
+                        editor.cursor_row = prev_cursor_row;
+                    }
+                }
                 (event::KeyCode::Esc, "Insert") => {
                     mode = "Normal";
-                    cmd_message = "".to_string();
+                    cmd_message.remove(0..cmd_message.len_chars());
                 }
                 (event::KeyCode::Char('i'), "Normal") => {
                     mode = "Insert";
-                    cmd_message = "".to_string();
+                    cmd_message.remove(0..cmd_message.len_chars());
                 }
                 (event::KeyCode::Char(c), "Insert") => {
                     let cursor_pos = editor
