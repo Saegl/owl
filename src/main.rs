@@ -22,6 +22,7 @@ struct Editor {
     shift_row: usize,
     mode: &'static str,
     cmd_message: Rope,
+    dirty: bool,
 }
 
 impl Editor {
@@ -46,6 +47,7 @@ impl Editor {
             self.cmd_message.remove(0..self.cmd_message.len_chars());
             self.cmd_message
                 .insert(0, &format!("{:?} written", self.filename.as_ref().unwrap()));
+            self.dirty = false;
             true
         } else {
             self.cmd_message.remove(0..self.cmd_message.len_chars());
@@ -83,15 +85,22 @@ impl Editor {
 
         let filename_label;
         if self.filename.is_some() {
-            filename_label = format!("| {}", self.filename.as_ref().unwrap().to_str().unwrap())
+            filename_label = format!(" | {}", self.filename.as_ref().unwrap().to_str().unwrap())
         } else {
             filename_label = "".to_string();
         }
 
+        let dirty_label;
+        if self.dirty {
+            dirty_label = " | +"
+        } else {
+            dirty_label = ""
+        }
+
         stdout().execute(cursor::MoveTo(0, rows - 2))?;
         stdout().execute(style::Print(format!(
-            "{} {}\r\n{}",
-            self.mode, filename_label, self.cmd_message
+            "{}{}{}\r\n{}",
+            self.mode, filename_label, dirty_label, self.cmd_message
         )))?;
         stdout().execute(cursor::MoveTo(self.cursor_col, self.cursor_row))?;
 
@@ -130,6 +139,7 @@ fn run(mut logs: Option<File>, filename: Option<PathBuf>) -> std::io::Result<()>
         shift_row: 0,
         mode: "Normal",
         cmd_message: Rope::new(),
+        dirty: false,
     };
 
     let mut prefered_col: Option<u16> = None;
@@ -164,9 +174,7 @@ fn run(mut logs: Option<File>, filename: Option<PathBuf>) -> std::io::Result<()>
 
         match ev {
             event::Event::Key(keyev) => match (keyev.code, editor.mode) {
-                (event::KeyCode::Char('q'), "Normal") => {
-                    break;
-                }
+                (event::KeyCode::Char('q'), "Normal") => {}
                 (event::KeyCode::Char('h'), "Normal") => {
                     if editor.cursor_col != 0 {
                         editor.cursor_col -= 1;
@@ -254,6 +262,17 @@ fn run(mut logs: Option<File>, filename: Option<PathBuf>) -> std::io::Result<()>
                     editor.cursor_row = prev_cursor_row;
 
                     if words[0] == ":q" || words[0] == ":quit" {
+                        if editor.dirty {
+                            editor.cmd_message.remove(0..editor.cmd_message.len_chars());
+                            editor
+                                .cmd_message
+                                .insert(0, "Unsaved changes! Save file with :w or force quit :q!");
+                            editor.mode = "Normal";
+                        } else {
+                            stdout().execute(cursor::SetCursorStyle::SteadyBlock)?;
+                            break;
+                        }
+                    } else if words[0] == ":q!" {
                         stdout().execute(cursor::SetCursorStyle::SteadyBlock)?;
                         break;
                     } else if words[0] == ":w" || words[0] == ":write" {
@@ -320,6 +339,7 @@ fn run(mut logs: Option<File>, filename: Option<PathBuf>) -> std::io::Result<()>
                         .text
                         .line_to_char(editor.cursor_row as usize + editor.shift_row)
                         + editor.cursor_col as usize;
+                    editor.dirty = true;
                     editor.text.insert_char(cursor_pos, '\n');
                     editor.cursor_row += 1;
                     editor.cursor_col = 0;
@@ -333,6 +353,7 @@ fn run(mut logs: Option<File>, filename: Option<PathBuf>) -> std::io::Result<()>
                         .text
                         .line_to_char(editor.cursor_row as usize + editor.shift_row)
                         + editor.cursor_col as usize;
+                    editor.dirty = true;
                     editor.text.insert_char(cursor_pos, '\n');
                     editor.cursor_col = 0;
 
@@ -343,6 +364,7 @@ fn run(mut logs: Option<File>, filename: Option<PathBuf>) -> std::io::Result<()>
                         .text
                         .line_to_char(editor.cursor_row as usize + editor.shift_row)
                         + editor.cursor_col as usize;
+                    editor.dirty = true;
                     editor.text.insert_char(cursor_pos, c);
                     editor.cursor_col += 1;
                 }
@@ -370,6 +392,7 @@ fn run(mut logs: Option<File>, filename: Option<PathBuf>) -> std::io::Result<()>
                         .text
                         .line_to_char(editor.cursor_row as usize + editor.shift_row)
                         + editor.cursor_col as usize;
+                    editor.dirty = true;
                     editor.text.insert_char(cursor_pos, '\n');
                     editor.cursor_row += 1;
                     editor.cursor_col = 0;
