@@ -152,6 +152,14 @@ fn run(mut logs: Option<File>, filename: Option<PathBuf>) -> std::io::Result<()>
             writeln!(logs, "text len lines {}", editor.text.len_lines())?;
         }
 
+        if let event::Event::Key(keyev) = ev {
+            if let event::KeyCode::Char(c) = keyev.code {
+                if c != 'j' && c != 'k' {
+                    prefered_col = None;
+                }
+            }
+        }
+
         match ev {
             event::Event::Key(keyev) => match (keyev.code, editor.mode) {
                 (event::KeyCode::Char('q'), "Normal") => {
@@ -161,8 +169,6 @@ fn run(mut logs: Option<File>, filename: Option<PathBuf>) -> std::io::Result<()>
                     editor.save();
                 }
                 (event::KeyCode::Char('h'), "Normal") => {
-                    prefered_col = None;
-
                     if editor.cursor_col != 0 {
                         editor.cursor_col -= 1;
                     }
@@ -202,8 +208,6 @@ fn run(mut logs: Option<File>, filename: Option<PathBuf>) -> std::io::Result<()>
                     editor.cursor_col = prefered_col.unwrap().min(editor.line_max());
                 }
                 (event::KeyCode::Char('l'), "Normal") => {
-                    prefered_col = None;
-
                     if (editor.cursor_col != cols - 1) && (editor.cursor_col < editor.line_max()) {
                         editor.cursor_col += 1;
                     }
