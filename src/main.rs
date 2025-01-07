@@ -275,6 +275,46 @@ fn run(mut logs: Option<File>, filename: Option<PathBuf>) -> std::io::Result<()>
                     editor.mode = "Insert";
                     editor.cmd_message.remove(0..editor.cmd_message.len_chars());
                 }
+                (event::KeyCode::Char('a'), "Normal") => {
+                    editor.mode = "Insert";
+                    editor.cursor_col = (editor.cursor_col + 1).min(editor.line_max());
+                    editor.cmd_message.remove(0..editor.cmd_message.len_chars());
+                }
+                (event::KeyCode::Char('I'), "Normal") => {
+                    editor.mode = "Insert";
+                    editor.cursor_col = 0;
+                    editor.cmd_message.remove(0..editor.cmd_message.len_chars());
+                }
+                (event::KeyCode::Char('A'), "Normal") => {
+                    editor.mode = "Insert";
+                    editor.cursor_col = editor.line_max();
+                    editor.cmd_message.remove(0..editor.cmd_message.len_chars());
+                }
+                (event::KeyCode::Char('o'), "Normal") => {
+                    editor.mode = "Insert";
+                    editor.cursor_col = editor.line_max();
+                    let cursor_pos = editor
+                        .text
+                        .line_to_char(editor.cursor_row as usize + editor.shift_row)
+                        + editor.cursor_col as usize;
+                    editor.text.insert_char(cursor_pos, '\n');
+                    editor.cursor_row += 1;
+                    editor.cursor_col = 0;
+
+                    editor.cmd_message.remove(0..editor.cmd_message.len_chars());
+                }
+                (event::KeyCode::Char('O'), "Normal") => {
+                    editor.mode = "Insert";
+                    editor.cursor_col = 0;
+                    let cursor_pos = editor
+                        .text
+                        .line_to_char(editor.cursor_row as usize + editor.shift_row)
+                        + editor.cursor_col as usize;
+                    editor.text.insert_char(cursor_pos, '\n');
+                    editor.cursor_col = 0;
+
+                    editor.cmd_message.remove(0..editor.cmd_message.len_chars());
+                }
                 (event::KeyCode::Char(c), "Insert") => {
                     let cursor_pos = editor
                         .text
