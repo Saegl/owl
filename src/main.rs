@@ -109,7 +109,13 @@ impl Editor {
 fn run(mut logs: Option<File>, filename: Option<PathBuf>) -> std::io::Result<()> {
     let text;
     if let Some(&ref pathbuf) = filename.as_ref() {
-        text = Rope::from_reader(BufReader::new(File::open(pathbuf)?))?;
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(pathbuf)?;
+
+        text = Rope::from_reader(BufReader::new(file))?;
     } else {
         text = Rope::new();
     }
