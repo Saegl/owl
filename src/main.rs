@@ -38,7 +38,7 @@ impl Editor {
     fn line_max(&self) -> u16 {
         self.currline().chars().into_iter().count() as u16
     }
-    fn save(&mut self) {
+    fn save(&mut self) -> bool {
         if let Some(&ref pathbuf) = self.filename.as_ref() {
             self.text
                 .write_to(BufWriter::new(File::create(pathbuf).unwrap()))
@@ -46,10 +46,12 @@ impl Editor {
             self.cmd_message.remove(0..self.cmd_message.len_chars());
             self.cmd_message
                 .insert(0, &format!("{:?} written", self.filename.as_ref().unwrap()));
+            true
         } else {
             self.cmd_message.remove(0..self.cmd_message.len_chars());
             self.cmd_message
                 .insert(0, "Cannot save file without a name");
+            false
         }
     }
     fn render(&self) -> std::io::Result<()> {
@@ -165,9 +167,6 @@ fn run(mut logs: Option<File>, filename: Option<PathBuf>) -> std::io::Result<()>
                 (event::KeyCode::Char('q'), "Normal") => {
                     break;
                 }
-                (event::KeyCode::Char('w'), "Normal") => {
-                    editor.save();
-                }
                 (event::KeyCode::Char('h'), "Normal") => {
                     if editor.cursor_col != 0 {
                         editor.cursor_col -= 1;
@@ -267,6 +266,20 @@ fn run(mut logs: Option<File>, filename: Option<PathBuf>) -> std::io::Result<()>
 
                         editor.mode = "Normal";
                         editor.save();
+                    } else if words[0] == ":wq" {
+                        if words.len() > 2 {
+                            editor.cmd_message.remove(0..editor.cmd_message.len_chars());
+                            editor.cmd_message.insert(0, "Too many args for :wq");
+                        } else if words.len() == 2 {
+                            editor.filename = Some(PathBuf::from(words[1]))
+                        }
+
+                        if editor.save() {
+                            stdout().execute(cursor::SetCursorStyle::SteadyBlock)?;
+                            break;
+                        } else {
+                            editor.mode = "Normal";
+                        }
                     } else {
                         editor.mode = "Normal";
                         let cmd = editor.cmd_message.to_string();
