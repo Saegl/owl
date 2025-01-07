@@ -79,10 +79,17 @@ impl Editor {
             }
         }
 
+        let filename_label;
+        if self.filename.is_some() {
+            filename_label = format!("| {}", self.filename.as_ref().unwrap().to_str().unwrap())
+        } else {
+            filename_label = "".to_string();
+        }
+
         stdout().execute(cursor::MoveTo(0, rows - 2))?;
         stdout().execute(style::Print(format!(
-            "{}\r\n{}",
-            self.mode, self.cmd_message
+            "{} {}\r\n{}",
+            self.mode, filename_label, self.cmd_message
         )))?;
         stdout().execute(cursor::MoveTo(self.cursor_col, self.cursor_row))?;
 
@@ -231,13 +238,24 @@ fn run(mut logs: Option<File>, filename: Option<PathBuf>) -> std::io::Result<()>
                     editor.cursor_row = prev_cursor_row;
                 }
                 (event::KeyCode::Enter, "Command") => {
-                    if editor.cmd_message == ":q" || editor.cmd_message == ":quit" {
+                    let message = editor.cmd_message.to_string();
+                    let words: Vec<&str> = message.split_whitespace().collect();
+
+                    editor.cursor_col = prev_cursor_col;
+                    editor.cursor_row = prev_cursor_row;
+
+                    if words[0] == ":q" || words[0] == ":quit" {
                         stdout().execute(cursor::SetCursorStyle::SteadyBlock)?;
                         break;
-                    } else if editor.cmd_message == ":w" || editor.cmd_message == ":write" {
+                    } else if words[0] == ":w" || words[0] == ":write" {
+                        if words.len() > 2 {
+                            editor.cmd_message.remove(0..editor.cmd_message.len_chars());
+                            editor.cmd_message.insert(0, "Too many args for :write");
+                        } else if words.len() == 2 {
+                            editor.filename = Some(PathBuf::from(words[1]))
+                        }
+
                         editor.mode = "Normal";
-                        editor.cursor_col = prev_cursor_col;
-                        editor.cursor_row = prev_cursor_row;
                         editor.save();
                     } else {
                         editor.mode = "Normal";
@@ -247,9 +265,6 @@ fn run(mut logs: Option<File>, filename: Option<PathBuf>) -> std::io::Result<()>
                         editor
                             .cmd_message
                             .insert(0, &format!("Unrecognized command {}", cmd));
-
-                        editor.cursor_col = prev_cursor_col;
-                        editor.cursor_row = prev_cursor_row;
                     }
                 }
                 (event::KeyCode::Esc, "Insert") => {
